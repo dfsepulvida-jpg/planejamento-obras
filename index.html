@@ -20,7 +20,10 @@
   .header h1 { margin: 0; font-size: 20px; color: var(--brand-navy); font-weight: 600; }
   h1 { margin: 0 0 16px 0; font-size: 22px; color: var(--brand-navy); }
   h2 { margin-top: 0; font-size: 15px; color: var(--brand-navy); font-weight: 600; }
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 16px; }
+  .donut-card { display: flex; flex-direction: column; }
+  .donut-wrap { position: relative; flex: 1; min-height: 200px; max-height: 230px; margin-top: 4px; }
+  .donut-wrap canvas { max-height: 230px; }
   .card { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px; }
   label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; font-weight: 500; }
   input, select { width: 100%; padding: 7px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; font-family: inherit; }
@@ -72,25 +75,30 @@
   <h1>Previsibilidade Pré-fabricados</h1>
 </div>
 
-<div class="grid-2">
+<div class="grid-top">
+  <div class="card card-compact donut-card">
+    <h2>Status das Obras</h2>
+    <div class="donut-wrap"><canvas id="statusChart"></canvas></div>
+  </div>
+
   <div class="card card-compact">
     <h2>Capacidade Produtiva</h2>
 
     <div class="capacity-block">
       <div class="capacity-row">
         <label>Segunda a Sexta (m³/dia)</label>
-        <input type="number" id="capMF" min="0.5" max="100" step="0.5" value="20">
+        <input type="number" id="capMF" min="0.5" max="40" step="0.5" value="20">
       </div>
-      <input type="range" id="capMFSlider" min="0.5" max="100" step="0.5" value="20">
+      <input type="range" id="capMFSlider" min="0.5" max="40" step="0.5" value="20">
       <p class="help" style="margin: 4px 0 0 0;">× 5 dias = <strong id="capMFWeekly">100</strong> m³/semana</p>
     </div>
 
     <div class="capacity-block">
       <div class="capacity-row">
         <label>Sábado (m³/dia)</label>
-        <input type="number" id="capSat" min="0" max="100" step="0.5" value="15">
+        <input type="number" id="capSat" min="0" max="40" step="0.5" value="15">
       </div>
-      <input type="range" id="capSatSlider" min="0" max="100" step="0.5" value="15">
+      <input type="range" id="capSatSlider" min="0" max="40" step="0.5" value="15">
     </div>
 
     <p class="help">Capacidade de Seg–Sex é diária e o sistema multiplica por 5. Sábado é a produção do próprio dia. As linhas no gráfico atualizam em tempo real.</p>
@@ -178,6 +186,30 @@
   // ---- Plugin registration ----
   const annotationPlugin = window['chartjs-plugin-annotation'];
   if (annotationPlugin) Chart.register(annotationPlugin);
+
+  const centerTextPlugin = {
+    id: 'centerText',
+    afterDraw(chart) {
+      if (chart.config.type !== 'doughnut') return;
+      const opts = chart.config.options.plugins?.centerText;
+      if (!opts || !opts.display) return;
+      const { ctx, chartArea } = chart;
+      if (!chartArea) return;
+      const x = (chartArea.left + chartArea.right) / 2;
+      const y = (chartArea.top + chartArea.bottom) / 2;
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#1a2d5e';
+      ctx.font = 'bold 28px system-ui, sans-serif';
+      ctx.fillText(String(opts.value ?? ''), x, y - 8);
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.fillStyle = '#666';
+      ctx.fillText(opts.label ?? '', x, y + 14);
+      ctx.restore();
+    }
+  };
+  Chart.register(centerTextPlugin);
 
   // ---- Constants ----
   const STATUSES = ['A iniciar', 'Ativa', 'Em negociação'];
@@ -498,9 +530,41 @@
     });
   }
 
+  let statusChart = null;
+  function renderStatusChart() {
+    const counts = { 'A iniciar': 0, 'Ativa': 0, 'Em negociação': 0 };
+    for (const o of obras) {
+      if (counts[o.status] !== undefined) counts[o.status]++;
+    }
+    const data = STATUSES.map(s => counts[s]);
+    const colors = STATUSES.map(s => STATUS_COLORS[s]);
+    const total = obras.length;
+
+    if (statusChart) statusChart.destroy();
+    const ctx = document.getElementById('statusChart').getContext('2d');
+    statusChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: STATUSES,
+        datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
+      },
+      options: {
+        cutout: '65%',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } },
+          tooltip: { callbacks: { label: c => `${c.label}: ${c.parsed} obra(s)` } },
+          centerText: { display: true, value: total, label: total === 1 ? 'obra' : 'obras' }
+        }
+      }
+    });
+  }
+
   function renderAll() {
     renderTable();
     renderChart();
+    renderStatusChart();
   }
 
   // ---- Capacity sync ----
