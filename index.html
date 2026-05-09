@@ -51,12 +51,11 @@
   .chart-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 4px 0 10px 0; font-size: 13px; }
   .chart-controls label { margin: 0; font-size: 12px; color: #555; font-weight: 500; }
   .chart-controls input[type=date] { width: auto; padding: 5px 8px; font-size: 12px; flex: 0 0 auto; }
-  .data-table { font-size: 12px; width: 100%; border-collapse: collapse; }
-  .data-table th, .data-table td { padding: 6px 10px; border-bottom: 1px solid #eee; }
-  .data-table th { background: #f9fafb; font-weight: 600; color: var(--brand-navy); text-transform: uppercase; font-size: 11px; letter-spacing: 0.03em; }
-  .data-table th.numeric, .data-table td.numeric { text-align: right; font-variant-numeric: tabular-nums; }
-  .data-table tr.total-row { font-weight: 700; background: #f9fafb; }
-  .data-table tr.total-row td { border-top: 2px solid var(--brand-navy); border-bottom: 0; }
+  .data-table-wrap { overflow-x: auto; }
+  .data-table { font-size: 12px; border-collapse: collapse; min-width: 100%; }
+  .data-table th, .data-table td { padding: 5px 8px; border: 1px solid #e5e7eb; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .data-table th.row-label { background: #f9fafb; text-align: left; font-weight: 700; color: var(--brand-navy); text-transform: uppercase; font-size: 11px; letter-spacing: 0.03em; position: sticky; left: 0; z-index: 1; }
+  .data-table tr.row-volume td { font-weight: 600; color: var(--brand-navy); background: #fafbfc; }
   .card-compact { padding: 8px 12px; }
   .card-compact h2 { margin-bottom: 6px; font-size: 13px; }
   .card-compact .help { font-size: 11px; margin: 2px 0; }
@@ -140,10 +139,11 @@
 
 <div class="card">
   <h2>Dados Semanais</h2>
-  <table class="data-table" id="dataTable">
-    <thead></thead>
-    <tbody></tbody>
-  </table>
+  <div class="data-table-wrap">
+    <table class="data-table" id="dataTable">
+      <tbody></tbody>
+    </table>
+  </div>
   <div class="empty" id="dataEmpty" style="display:none;">Sem dados para exibir.</div>
 </div>
 
@@ -506,15 +506,15 @@
     return v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   }
 
+  const MONTHS_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
   function renderDataTable() {
     const weeks = getFilteredWeeks();
-    const thead = document.querySelector('#dataTable thead');
     const tbody = document.querySelector('#dataTable tbody');
     const empty = document.getElementById('dataEmpty');
     const table = document.getElementById('dataTable');
 
     if (weeks.length === 0) {
-      thead.innerHTML = '';
       tbody.innerHTML = '';
       empty.style.display = '';
       table.style.display = 'none';
@@ -523,39 +523,25 @@
     empty.style.display = 'none';
     table.style.display = '';
 
-    thead.innerHTML = `
-      <tr>
-        <th>Semana</th>
-        ${STATUSES.map(s => `<th class="numeric">${s}</th>`).join('')}
-        <th class="numeric">Total</th>
-      </tr>
-    `;
+    const volRow = `<tr class="row-volume">
+      <th class="row-label">m³</th>
+      ${weeks.map(w => {
+        const total = STATUSES.reduce((s, st) => s + w.byStatus[st], 0);
+        return `<td>${fmtNum(total)}</td>`;
+      }).join('')}
+    </tr>`;
 
-    const grand = { 'A iniciar': 0, 'Ativa': 0, 'Em negociação': 0 };
-    let grandTotal = 0;
+    const semRow = `<tr>
+      <th class="row-label">Semana</th>
+      ${weeks.map(w => `<td>${isoWeek(w.weekStart)}</td>`).join('')}
+    </tr>`;
 
-    const rows = weeks.map(w => {
-      const weekTotal = STATUSES.reduce((s, st) => s + w.byStatus[st], 0);
-      STATUSES.forEach(st => grand[st] += w.byStatus[st]);
-      grandTotal += weekTotal;
-      return `
-        <tr>
-          <td>Sem ${isoWeek(w.weekStart)} – ${formatDateBR(w.weekStart)}</td>
-          ${STATUSES.map(s => `<td class="numeric">${fmtNum(w.byStatus[s])}</td>`).join('')}
-          <td class="numeric">${fmtNum(weekTotal)}</td>
-        </tr>
-      `;
-    }).join('');
+    const mesRow = `<tr>
+      <th class="row-label">Mês</th>
+      ${weeks.map(w => `<td>${MONTHS_PT[w.weekStart.getMonth()]}</td>`).join('')}
+    </tr>`;
 
-    const totalRow = `
-      <tr class="total-row">
-        <td>Total</td>
-        ${STATUSES.map(s => `<td class="numeric">${fmtNum(grand[s])}</td>`).join('')}
-        <td class="numeric">${fmtNum(grandTotal)}</td>
-      </tr>
-    `;
-
-    tbody.innerHTML = rows + totalRow;
+    tbody.innerHTML = volRow + semRow + mesRow;
   }
 
   let chart = null;
