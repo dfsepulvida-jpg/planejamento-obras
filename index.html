@@ -541,7 +541,12 @@
       ${weeks.map(w => `<td>${MONTHS_PT[w.weekStart.getMonth()]}</td>`).join('')}
     </tr>`;
 
-    tbody.innerHTML = volRow + semRow + mesRow;
+    const anoRow = `<tr>
+      <th class="row-label">Ano</th>
+      ${weeks.map(w => `<td>${w.weekStart.getFullYear()}</td>`).join('')}
+    </tr>`;
+
+    tbody.innerHTML = volRow + semRow + mesRow + anoRow;
   }
 
   let chart = null;
